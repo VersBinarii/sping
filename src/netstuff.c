@@ -6,32 +6,33 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-#include "inc/netstuff.h"
+#include "inc/config.h"
 #include "inc/log.h"
+#include "inc/netstuff.h"
 
-#define MAX_BUF 1024
+#define MAX_BUF 512
 
-static int init_socket(char *, int);
+static int init_socket(sp_config_s);
 static int udp_send_to(int, char *, int, char *);
 static int udp_recv_from(int, int, char *);
 
 static struct sockaddr_in me_addr, them_addr;
 static socklen_t addr_len = sizeof(them_addr);
 
-int sp_udp_ping(char *ip, int port){
+int sp_udp_ping(sp_config_s config){
   int sock;
   char buf[MAX_BUF];
   char *options = strdup("sip options...plenty options...");
 
-  if((sock = init_socket(ip, port)) == -1){
+  if((sock = init_socket(config)) == -1){
     return -1;
   }
 
-  if(udp_send_to(sock, ip, port, options) == -1){
-    kg_log_err("Problem sending OPTIONS to [%s]\n", ip);
+  if(udp_send_to(sock, config.dest, config.destport, options) == -1){
+    kg_log_err("Problem sending OPTIONS to [%s]\n", config.dest);
     return -1;
   }
-  if(udp_recv_from(sock, port, buf) == -1){
+  if(udp_recv_from(sock, config.srcport, buf) == -1){
     kg_log_err("Problem getting response\n");
     return -1;
   }
@@ -39,7 +40,7 @@ int sp_udp_ping(char *ip, int port){
   return 0;
 }
 
-static int init_socket(char *ip, int port){
+static int init_socket(sp_config_s config){
 
   int this_sock; /* socket for this server */
 
@@ -57,14 +58,18 @@ static int init_socket(char *ip, int port){
   /* destination details */
   memset(&them_addr, 0, sizeof(them_addr));
   them_addr.sin_family = AF_INET;
-  them_addr.sin_port = htons(port);
+  them_addr.sin_port = htons(config.destport);
 
   /* source details */
   memset(&me_addr, 0, sizeof(me_addr));
   me_addr.sin_family = AF_INET;
-  me_addr.sin_port = htons(port);
-  me_addr.sin_addr.s_addr= htonl(INADDR_ANY);
-
+  me_addr.sin_port = htons(config.srcport);
+  if(config.src){
+    inet_aton(config.src, &them_addr.sin_addr);
+  }else{
+    me_addr.sin_addr.s_addr= htonl(INADDR_ANY);
+  }
+  
   bind(this_sock, (struct sockaddr *)&me_addr, sizeof(me_addr));
   
   return this_sock;
