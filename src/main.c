@@ -13,14 +13,16 @@
 #include "inc/netstuff.h"
 
 #define PROGNAME "sping"
-#define VERSION "0.0.2"
+#define VERSION "0.0.4"
 
 static void show_usage(int status);
 
 sp_config_s sp_config = {
+  .iface = NULL,
   .src = NULL,
   .destport = 5060,
   .srcport = 5060,
+  .number = "anonymous",
   .type = UDP,
   .verbose = 0
 };
@@ -36,13 +38,14 @@ int main(int argc, char **argv){
   sp_config.dest = argv[1];
 
   int argval;
-  while((argval = getopt(argc, argv, "I:p:tP:vh")) != -1){
+  while((argval = getopt(argc, argv, "i:I:p:tP:N:vh")) != -1){
     switch(argval){
-    case 'I':
-      //source address
-      sp_config.src = optarg;
+    
+    case 'i':
+      //outgoing iface
+      sp_config.iface = optarg;
       break;
-
+     
     case 'p':
       //dest port umber
       sp_config.destport =atoi(optarg);
@@ -53,6 +56,11 @@ int main(int argc, char **argv){
       sp_config.srcport = atoi(optarg);
       break;
       
+    case 'N':
+      // specify phone number
+      sp_config.number = optarg;
+      break;
+
     case 't':
       //use TCP
       sp_config.type = TCP;
@@ -73,7 +81,9 @@ int main(int argc, char **argv){
     }
   }
   
-  kg_log_info("Sending UPD ping to [%s]\n", sp_config.dest);
+  if(sp_config.verbose){
+    kg_log_info("Sending UPD ping to [%s]\n", sp_config.dest);
+  }
   sp_udp_ping(sp_config);
   return 0;
 }
@@ -86,12 +96,13 @@ static void show_usage(int status){
   fprintf(output, "Version: %s\n", VERSION);
   fprintf(output, "\nUsage: %s <host> [options]\n", PROGNAME);
   fprintf(output, "Options:\n");
-  fprintf(output, "\t\"-p <port>\" - destination port\n");
-  fprintf(output, "\t\"-P <port>\" - source port\n");
-  fprintf(output, "\t\"-I <ip>\"   - specify source IP (not implemented yet)\n");
-  fprintf(output, "\t\"-t\"        - use TCP (not implemented yet)\n");
-  fprintf(output, "\t\"-v\"        - verbose output.\n");
-  fprintf(output, "\t\"-h\"        - display this help menu.\n");
+  fprintf(output, "\t\"-p <port>\"           - destination port\n");
+  fprintf(output, "\t\"-P <port>\"           - source port\n");
+  fprintf(output, "\t\"-i <if>\"             - specify outgoing iface\n");
+  fprintf(output, "\t\"-N <phone_number>\"   - specify DDI number\n");
+  fprintf(output, "\t\"-t\"                  - use TCP (not implemented yet)\n");
+  fprintf(output, "\t\"-v\"                  - verbose output.\n");
+  fprintf(output, "\t\"-h\"                  - display this help menu.\n");
   fprintf(output, "\n");
   exit(status);
 }

@@ -1,20 +1,25 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netdb.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
+#include <net/if.h>
 
 #include "inc/config.h"
+#include "inc/sip.h"
 #include "inc/log.h"
 #include "inc/netstuff.h"
 
-#define MAX_BUF 512
+#define MAX_BUF 2048
 
-static int init_socket(sp_config_s);
+static int init_socket(sp_config_s *);
 static int udp_send_to(int, char *, int, char *);
 static int udp_recv_from(int, int, char *);
+static char *get_my_address(char *);
 
 static struct sockaddr_in me_addr, them_addr;
 static socklen_t addr_len = sizeof(them_addr);
@@ -22,11 +27,16 @@ static socklen_t addr_len = sizeof(them_addr);
 int sp_udp_ping(sp_config_s config){
   int sock;
   char buf[MAX_BUF];
-  char *options = strdup("sip options...plenty options...");
-
-  if((sock = init_socket(config)) == -1){
+ 
+  if((sock = init_socket(&config)) == -1){
     return -1;
   }
+
+  /* the structure is populated at this sstage */
+  if(config.verbose){
+    kg_log_info("Creating SIP OPTIONS\n");
+  }
+  char *options = sp_sip_option(config);
 
   if(udp_send_to(sock, config.dest, config.destport, options) == -1){
     kg_log_err("Problem sending OPTIONS to [%s]\n", config.dest);
@@ -36,14 +46,15 @@ int sp_udp_ping(sp_config_s config){
     kg_log_err("Problem getting response\n");
     return -1;
   }
+  kg_log_info("[%s] responds:\n\n[%s]\n",config.dest, buf);
   close(sock);
   return 0;
 }
 
-static int init_socket(sp_config_s config){
-
+static int init_socket(sp_config_s *config){
+  
   int this_sock; /* socket for this server */
-
+  
   if((this_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1){
     kg_log_err("Cannot get socket.");
     return -1;
@@ -58,16 +69,23 @@ static int init_socket(sp_config_s config){
   /* destination details */
   memset(&them_addr, 0, sizeof(them_addr));
   them_addr.sin_family = AF_INET;
-  them_addr.sin_port = htons(config.destport);
-
+  them_addr.sin_port = htons(config->destport);
+  
   /* source details */
   memset(&me_addr, 0, sizeof(me_addr));
   me_addr.sin_family = AF_INET;
-  me_addr.sin_port = htons(config.srcport);
-  if(config.src){
-    inet_aton(config.src, &them_addr.sin_addr);
+  me_addr.sin_port = htons(config->srcport);
+
+  /* if no iface specyfied than use any */
+  if(config->iface){ 
+    config->src = get_my_address(config->iface);
+    inet_aton(config->src, &them_addr.sin_addr);
+    if(config->verbose){
+      kg_log_info("Sending from [%s] interface.\nThe IP: [%s]", config->iface, config->src);
+    }
   }else{
-    me_addr.sin_addr.s_addr= htonl(INADDR_ANY);
+    kg_log_err("Specify outgoing interface\n");
+    return -1;
   }
   
   bind(this_sock, (struct sockaddr *)&me_addr, sizeof(me_addr));
@@ -87,13 +105,10 @@ static int udp_send_to(int sock, char *ip, int port, char *sip_pack){
     kg_log_err("Problem with sending data");
     return -1;
   }
-  kg_log_info("Sending [%d] bytes to [%s]\n",numbytes, inet_ntoa(them_addr.sin_addr));
   return numbytes;
 }
 
 static int udp_recv_from(int sock, int port, char *databuf){
-
-  kg_log_info("recv_from() - \nport = [%d]\n", port);
 
   int numbytes;
   if((numbytes = recvfrom(sock, databuf, MAX_BUF - 1, 0, (struct sockaddr *) &me_addr, &addr_len)) == -1){
@@ -101,7 +116,23 @@ static int udp_recv_from(int sock, int port, char *databuf){
     return -1;
   }
   databuf[numbytes] = '\0';
-  kg_log_info("Received [%s]\n", databuf);
-  
+
   return numbytes;
+}
+
+static char *get_my_address(char * ifc){
+  struct ifreq iface;
+
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  
+  iface.ifr_addr.sa_family = AF_INET;
+  strncpy(iface.ifr_name, ifc, IFNAMSIZ-1);
+
+  if(ioctl(sock, SIOCGIFADDR, &iface) == -1){
+    kg_log_err("Cannot find IP for [%s]\n", ifc);
+    return NULL;
+  }
+  close(sock);
+
+  return inet_ntoa(((struct sockaddr_in *)&iface.ifr_addr)->sin_addr);
 }

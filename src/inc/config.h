@@ -7,10 +7,12 @@ typedef enum proto_type{
 }proto_type;
 
 typedef struct sp_config_s{
+  char *iface;
   char *src;
   char *dest;
   int destport;
   int srcport;
+  char *number; /* optional phone number */
   proto_type type; /* tcp or udp */
   int verbose;
 
