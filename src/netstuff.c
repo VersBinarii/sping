@@ -43,11 +43,12 @@ int sp_udp_ping(sp_config_s config){
     return -1;
   }
   if(udp_recv_from(sock, config.srcport, buf) == -1){
-    kg_log_err("Problem getting response\n");
+    kg_log_err("Response timeout\n");
     return -1;
   }
   kg_log_info("[%s] responds:\n\n[%s]\n",config.dest, buf);
   close(sock);
+  free(options);
   return 0;
 }
 
@@ -61,8 +62,17 @@ static int init_socket(sp_config_s *config){
   }
   /* might want to reuse this often */
   int reuse = 1;
-  if(setsockopt(this_sock,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof(int)) == -1){
+  if(setsockopt(this_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) == -1){
     kg_log_err("Could not change socket options.");
+    return -1;
+  }
+  struct timeval tv = {
+    .tv_sec = 10,
+    .tv_usec = 0
+  };
+
+  if(setsockopt(this_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval)) == -1){
+    kg_log_err("Could not set socket timeout.");
     return -1;
   }
   

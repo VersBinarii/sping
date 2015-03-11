@@ -3,7 +3,7 @@
 #include "inc/log.h"
 #include "inc/config.h"
 #include "inc/sip.h"
-#include "inc/asprintf.h"
+#include "inc/mysprintf.h"
 
 static char *OPTION = 
 
@@ -32,7 +32,7 @@ Content-Length: 0
 
 char *sp_sip_option(sp_config_s cfg){
   char *opt;
-  asprintf(&opt, OPTION, 
+  mysprintf(&opt, OPTION, 
 	   cfg.dest, cfg.destport,
 	   cfg.src, cfg.src, cfg.srcport,
 	   cfg.src, cfg.srcport,

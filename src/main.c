@@ -13,7 +13,9 @@
 #include "inc/netstuff.h"
 
 #define PROGNAME "sping"
-#define VERSION "0.0.4"
+#define VERSION "0.0.5"
+
+int timeout = 9999999;
 
 static void show_usage(int status);
 
